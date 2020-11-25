@@ -89,6 +89,11 @@ def load_parameters(params, controller):
     for p, p_0 in zip(controller.parameters(), params):
         p.data.copy_(p_0)
 
+def rename_dict_key(dct, src_key, dst_key):
+    dct[dst_key] = dct[src_key]
+    del dct[src_key]
+    return dct
+
 class RolloutGenerator(object):
     """ Utility to generate rollouts.
 

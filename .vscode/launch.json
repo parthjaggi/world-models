@@ -17,6 +17,18 @@
             ],
             "subProcess": true,
             "justMyCode": false,
+        },
+        {
+            "name": "train-vae",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/trainvae.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--logdir", "exp_dir", 
+            ],
+            "subProcess": true,
+            "justMyCode": false,
         }
     ]
 }

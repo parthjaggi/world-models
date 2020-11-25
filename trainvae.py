@@ -1,7 +1,7 @@
 """ Training VAE """
 import argparse
 from os.path import join, exists
-from os import mkdir
+from os import mkdir, makedirs
 
 import torch
 import torch.utils.data
@@ -20,15 +20,12 @@ from utils.learning import ReduceLROnPlateau
 from data.loaders import RolloutObservationDataset
 
 parser = argparse.ArgumentParser(description='VAE Trainer')
-parser.add_argument('--batch-size', type=int, default=32, metavar='N',
-                    help='input batch size for training (default: 32)')
-parser.add_argument('--epochs', type=int, default=1000, metavar='N',
-                    help='number of epochs to train (default: 1000)')
+parser.add_argument('--batch-size', type=int, default=32, metavar='N', help='input batch size for training (default: 32)')
+parser.add_argument('--epochs', type=int, default=1000, metavar='N', help='number of epochs to train (default: 1000)')
 parser.add_argument('--logdir', type=str, help='Directory where results are logged')
-parser.add_argument('--noreload', action='store_true',
-                    help='Best model is not reloaded if specified')
-parser.add_argument('--nosamples', action='store_true',
-                    help='Does not save samples during training if specified')
+parser.add_argument('--noreload', action='store_true', help='Best model is not reloaded if specified')
+parser.add_argument('--nosamples', action='store_true', help='Does not save samples during training if specified')
+parser.add_argument('--norecons', action='store_true', help='Does not save reconstructions during training if specified')
 
 
 args = parser.parse_args()
@@ -55,17 +52,15 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-dataset_train = RolloutObservationDataset('datasets/carracing',
-                                          transform_train, train=True)
-dataset_test = RolloutObservationDataset('datasets/carracing',
-                                         transform_test, train=False)
-train_loader = torch.utils.data.DataLoader(
-    dataset_train, batch_size=args.batch_size, shuffle=True, num_workers=2)
-test_loader = torch.utils.data.DataLoader(
-    dataset_test, batch_size=args.batch_size, shuffle=True, num_workers=2)
+# dataset_dir = 'datasets/carracing'
+dataset_dir = 'datasets/dtse'
+dataset_train = RolloutObservationDataset(dataset_dir, transform_train, train=True)
+dataset_test = RolloutObservationDataset(dataset_dir, transform_test, train=False)
+train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, num_workers=2)
+test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
-
-model = VAE(3, LSIZE).to(device)
+img_channels = 1 # 1, 3
+model = VAE(img_channels, LSIZE).to(device)
 optimizer = optim.Adam(model.parameters())
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=5)
 earlystopping = EarlyStopping('min', patience=30)
@@ -124,8 +119,9 @@ def test():
 # check vae dir exists, if not, create it
 vae_dir = join(args.logdir, 'vae')
 if not exists(vae_dir):
-    mkdir(vae_dir)
-    mkdir(join(vae_dir, 'samples'))
+    makedirs(vae_dir, exist_ok=True)
+    makedirs(join(vae_dir, 'samples'), exist_ok=True)
+    makedirs(join(vae_dir, 'recons'), exist_ok=True)
 
 reload_file = join(vae_dir, 'best.tar')
 if not args.noreload and exists(reload_file):
@@ -165,13 +161,22 @@ for epoch in range(1, args.epochs + 1):
     }, is_best, filename, best_filename)
 
 
-
     if not args.nosamples:
         with torch.no_grad():
             sample = torch.randn(RED_SIZE, LSIZE).to(device)
             sample = model.decoder(sample).cpu()
-            save_image(sample.view(64, 3, RED_SIZE, RED_SIZE),
-                       join(vae_dir, 'samples/sample_' + str(epoch) + '.png'))
+            save_image(sample.view(64, img_channels, RED_SIZE, RED_SIZE), join(vae_dir, 'samples/sample_' + str(epoch) + '.png'))
+
+    if not args.norecons:
+        with torch.no_grad():
+            # sample = next(iter(train_loader)).to(device)
+            sample = next(iter(test_loader)).to(device)
+            model.eval()
+            recon_batch, _, _ = model(sample)
+            joined = torch.empty((64, img_channels, 64, 64), dtype=sample.dtype)
+            joined[0::2, :, :, :] = sample
+            joined[1::2, :, :, :] = recon_batch
+            save_image(joined.view(64, img_channels, RED_SIZE, RED_SIZE), join(vae_dir, 'recons/sample_' + str(epoch) + '.png'))
 
     if earlystopping.stop:
         print("End of Training because of early stopping at epoch {}".format(epoch))

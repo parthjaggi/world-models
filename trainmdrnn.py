@@ -20,12 +20,9 @@ from models.vae import VAE
 from models.mdrnn import MDRNN, gmm_loss
 
 parser = argparse.ArgumentParser("MDRNN training")
-parser.add_argument('--logdir', type=str,
-                    help="Where things are logged and models are loaded from.")
-parser.add_argument('--noreload', action='store_true',
-                    help="Do not reload if specified.")
-parser.add_argument('--include_reward', action='store_true',
-                    help="Add a reward modelisation term to the loss.")
+parser.add_argument('--logdir', type=str, help="Where things are logged and models are loaded from.")
+parser.add_argument('--noreload', action='store_true', help="Do not reload if specified.")
+parser.add_argument('--include_reward', action='store_true', help="Add a reward modelisation term to the loss.")
 args = parser.parse_args()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

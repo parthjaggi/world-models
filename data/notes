@@ -1,0 +1,11 @@
+for k in data:
+    print(k, data[k].shape, data[k].dtype)
+
+observations (1000, 64, 64, 3) uint8
+rewards (1000,) float64
+actions (1001, 3) float64
+terminals (1000,) bool
+
+reward (500,) int64
+action (500,) int64
+observations (500, 16, 200, 2) float64

@@ -6,6 +6,7 @@ from tqdm import tqdm
 import torch
 import torch.utils.data
 import numpy as np
+from utils.misc import rename_dict_key
 
 class _RolloutDataset(torch.utils.data.Dataset): # pylint: disable=too-few-public-methods
     def __init__(self, root, transform, buffer_size=200, train=True): # pylint: disable=too-many-arguments
@@ -16,10 +17,11 @@ class _RolloutDataset(torch.utils.data.Dataset): # pylint: disable=too-few-publi
             for sd in listdir(root) if isdir(join(root, sd))
             for ssd in listdir(join(root, sd))]
 
+        test_count = int(0.4 * len(self._files))
         if train:
-            self._files = self._files[:-600]
+            self._files = self._files[:-test_count]
         else:
-            self._files = self._files[-600:]
+            self._files = self._files[-test_count:]
 
         self._cum_size = None
         self._buffer = None
@@ -36,15 +38,27 @@ class _RolloutDataset(torch.utils.data.Dataset): # pylint: disable=too-few-publi
         self._cum_size = [0]
 
         # progress bar
-        pbar = tqdm(total=len(self._buffer_fnames),
-                    bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} {postfix}')
+        pbar = tqdm(total=len(self._buffer_fnames), bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} {postfix}')
         pbar.set_description("Loading file buffer ...")
 
         for f in self._buffer_fnames:
-            with np.load(f) as data:
-                self._buffer += [{k: np.copy(v) for k, v in data.items()}]
-                self._cum_size += [self._cum_size[-1] +
-                                   self._data_per_sequence(data['rewards'].shape[0])]
+            if f.endswith('npz'):
+                with np.load(f) as data:
+                    self._buffer += [{k: np.copy(v) for k, v in data.items()}]
+                    self._cum_size += [self._cum_size[-1] + self._data_per_sequence(data['rewards'].shape[0])]
+            else:
+                # ['observations', 'rewards', 'actions', 'terminals']
+                data = np.load(f, allow_pickle=True).item()
+                data['obs'] = data['obs'].reshape(((data['obs'].shape[0],) + data['obs'].shape[2:])).astype(np.uint8)
+                data['obs'] = data['obs'][:, 0]
+                data['obs'][data['obs'] == 0] = 255
+                data['obs'][data['obs'] == 1] = 0
+                data = rename_dict_key(data, 'obs', 'observations')
+                data = rename_dict_key(data, 'action', 'actions')
+                data = rename_dict_key(data, 'reward', 'rewards')
+                data['terminals'] = np.zeros(data['actions'].shape, np.bool)
+                self._buffer += [data]
+                self._cum_size += [self._cum_size[-1] + self._data_per_sequence(data['rewards'].shape[0])]
             pbar.update(1)
         pbar.close()
 
@@ -108,8 +122,7 @@ class RolloutSequenceDataset(_RolloutDataset): # pylint: disable=too-few-public-
         obs, next_obs = obs_data[:-1], obs_data[1:]
         action = data['actions'][seq_index+1:seq_index + self._seq_len + 1]
         action = action.astype(np.float32)
-        reward, terminal = [data[key][seq_index+1:
-                                      seq_index + self._seq_len + 1].astype(np.float32)
+        reward, terminal = [data[key][seq_index+1: seq_index + self._seq_len + 1].astype(np.float32)
                             for key in ('rewards', 'terminals')]
         # data is given in the form
         # (obs, action, reward, terminal, next_obs)
