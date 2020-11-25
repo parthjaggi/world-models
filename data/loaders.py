@@ -50,7 +50,7 @@ class _RolloutDataset(torch.utils.data.Dataset): # pylint: disable=too-few-publi
                 # ['observations', 'rewards', 'actions', 'terminals']
                 data = np.load(f, allow_pickle=True).item()
                 data['obs'] = data['obs'].reshape(((data['obs'].shape[0],) + data['obs'].shape[2:])).astype(np.uint8)
-                data['obs'] = data['obs'][:, 0]
+                data['obs'] = data['obs'][:, :, :, 0]
                 data['obs'][data['obs'] == 0] = 255
                 data['obs'][data['obs'] == 1] = 0
                 data = rename_dict_key(data, 'obs', 'observations')

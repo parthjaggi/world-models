@@ -9,3 +9,35 @@ terminals (1000,) bool
 reward (500,) int64
 action (500,) int64
 observations (500, 16, 200, 2) float64
+
+torch.Size([32, 32, 16, 93])
+torch.Size([32, 64, 16, 39])
+torch.Size([32, 128, 16, 12])
+torch.Size([32, 128, 16, 3])
+torch.Size([32, 6144])
+
+ORGINAL x.shape.. DECONV SHOULD RETURN THIS SHAPE
+torch.Size([32, 1, 16, 200])
+
+torch.Size([32, 32])
+torch.Size([32, 6144])
+x.view(x.size(0), -1, 16, 3)
+torch.Size([32, 384, 16, 1])
+
+b = F.relu(self.deconv1(b))
+torch.Size([32, 128, 16, 8])
+
+b = F.relu(self.deconv2(b))
+torch.Size([32, 64, 16, 30])
+
+b = F.relu(self.deconv3(b))
+torch.Size([32, 32, 16, 74])
+
+untimeError: Given transposed=1, weight of size [32, 1, 16, 20], expected input[32, 1, 16, 166] to have 32 channels, but got 1 channels instead
+[32, 1, 16, 166]
+
+torch.Size([32, 6144])
+torch.Size([32, 384, 16, 1])
+torch.Size([32, 128, 16, 8])
+torch.Size([32, 64, 16, 30])
+torch.Size([32, 32, 16, 74])

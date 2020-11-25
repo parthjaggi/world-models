@@ -41,14 +41,14 @@ device = torch.device("cuda" if cuda else "cpu")
 
 transform_train = transforms.Compose([
     transforms.ToPILImage(),
-    transforms.Resize((RED_SIZE, RED_SIZE)),
-    transforms.RandomHorizontalFlip(),
+    # transforms.Resize((RED_SIZE, RED_SIZE)),
+    # transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
 ])
 
 transform_test = transforms.Compose([
     transforms.ToPILImage(),
-    transforms.Resize((RED_SIZE, RED_SIZE)),
+    # transforms.Resize((RED_SIZE, RED_SIZE)),
     transforms.ToTensor(),
 ])
 
@@ -165,7 +165,7 @@ for epoch in range(1, args.epochs + 1):
         with torch.no_grad():
             sample = torch.randn(RED_SIZE, LSIZE).to(device)
             sample = model.decoder(sample).cpu()
-            save_image(sample.view(64, img_channels, RED_SIZE, RED_SIZE), join(vae_dir, 'samples/sample_' + str(epoch) + '.png'))
+            save_image(sample.view(64, *sample.shape[1:]), join(vae_dir, 'samples/sample_' + str(epoch) + '.png'))
 
     if not args.norecons:
         with torch.no_grad():
@@ -173,10 +173,10 @@ for epoch in range(1, args.epochs + 1):
             sample = next(iter(test_loader)).to(device)
             model.eval()
             recon_batch, _, _ = model(sample)
-            joined = torch.empty((64, img_channels, 64, 64), dtype=sample.dtype)
+            joined = torch.empty((64, *sample.shape[1:]), dtype=sample.dtype)
             joined[0::2, :, :, :] = sample
             joined[1::2, :, :, :] = recon_batch
-            save_image(joined.view(64, img_channels, RED_SIZE, RED_SIZE), join(vae_dir, 'recons/sample_' + str(epoch) + '.png'))
+            save_image(joined.view(64, *sample.shape[1:]), join(vae_dir, 'recons/sample_' + str(epoch) + '.png'))
 
     if earlystopping.stop:
         print("End of Training because of early stopping at epoch {}".format(epoch))
