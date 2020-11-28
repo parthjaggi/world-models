@@ -8,4 +8,4 @@ frames/
 dock_config.json
 .mypy_cache
 exp_dir/vae/
-carracing_exp_dir/vae/
+*_exp_dir/vae/

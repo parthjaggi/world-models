@@ -116,12 +116,23 @@ def test():
     print('====> Test set loss: {:.4f}'.format(test_loss))
     return test_loss
 
+
+def save_reconstruction(sample, base_path):
+    model.eval()
+    recon_batch, _, _ = model(sample)
+    joined = torch.empty((64, *sample.shape[1:]), dtype=sample.dtype)
+    joined[0::2, :, :, :] = sample
+    joined[1::2, :, :, :] = recon_batch
+    save_image(joined.view(64, *sample.shape[1:]), join(vae_dir, base_path + str(epoch) + '.png'))
+
+
 # check vae dir exists, if not, create it
 vae_dir = join(args.logdir, 'vae')
 if not exists(vae_dir):
     makedirs(vae_dir, exist_ok=True)
     makedirs(join(vae_dir, 'samples'), exist_ok=True)
     makedirs(join(vae_dir, 'recons'), exist_ok=True)
+    makedirs(join(vae_dir, 'recons_test'), exist_ok=True)
 
 reload_file = join(vae_dir, 'best.tar')
 if not args.noreload and exists(reload_file):
@@ -169,14 +180,11 @@ for epoch in range(1, args.epochs + 1):
 
     if not args.norecons:
         with torch.no_grad():
-            # sample = next(iter(train_loader)).to(device)
-            sample = next(iter(test_loader)).to(device)
-            model.eval()
-            recon_batch, _, _ = model(sample)
-            joined = torch.empty((64, *sample.shape[1:]), dtype=sample.dtype)
-            joined[0::2, :, :, :] = sample
-            joined[1::2, :, :, :] = recon_batch
-            save_image(joined.view(64, *sample.shape[1:]), join(vae_dir, 'recons/sample_' + str(epoch) + '.png'))
+            sample = next(iter(train_loader)).to(device)
+            save_reconstruction(sample, 'recons/sample_')
+            test_sample = next(iter(test_loader)).to(device)
+            save_reconstruction(test_sample, 'recons_test/sample_')
+
 
     if earlystopping.stop:
         print("End of Training because of early stopping at epoch {}".format(epoch))
