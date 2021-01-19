@@ -25,7 +25,12 @@
             "program": "${workspaceFolder}/trainvae.py",
             "console": "integratedTerminal",
             "args": [
-                "--logdir", "exp_dir", 
+                "--logdir", "exp_dir",
+                "--early-stopping-patience", "60",
+                
+                // "--dataset-dir", "datasets/carracing",
+                // "--dataset-dir", "datasets/dtse_test4_2",
+                "--dataset-dir", "datasets/dtse_test0_1",
             ],
             "subProcess": true,
             "justMyCode": false,

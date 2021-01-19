@@ -26,9 +26,12 @@ parser.add_argument('--logdir', type=str, help='Directory where results are logg
 parser.add_argument('--noreload', action='store_true', help='Best model is not reloaded if specified')
 parser.add_argument('--nosamples', action='store_true', help='Does not save samples during training if specified')
 parser.add_argument('--norecons', action='store_true', help='Does not save reconstructions during training if specified')
+parser.add_argument('--dataset-dir', type=str, help='Directory of dataset.')
+parser.add_argument('--early-stopping-patience', type=int, default=30)
 
 
 args = parser.parse_args()
+args.type = args.dataset_dir.split('/')[1]
 cuda = torch.cuda.is_available()
 
 
@@ -52,18 +55,17 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-# dataset_dir = 'datasets/carracing'
-dataset_dir = 'datasets/dtse'
+dataset_dir = args.dataset_dir
 dataset_train = RolloutObservationDataset(dataset_dir, transform_train, train=True)
 dataset_test = RolloutObservationDataset(dataset_dir, transform_test, train=False)
 train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, num_workers=2)
 test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
 img_channels = 1 # 1, 3
-model = VAE(img_channels, LSIZE).to(device)
+model = VAE(img_channels, LSIZE, args).to(device)
 optimizer = optim.Adam(model.parameters())
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=5)
-earlystopping = EarlyStopping('min', patience=30)
+earlystopping = EarlyStopping('min', patience=args.early_stopping_patience)
 
 # Reconstruction + KL divergence losses summed over all elements and batch
 def loss_function(recon_x, x, mu, logsigma):
@@ -188,4 +190,4 @@ for epoch in range(1, args.epochs + 1):
 
     if earlystopping.stop:
         print("End of Training because of early stopping at epoch {}".format(epoch))
-        break
+    #     break
