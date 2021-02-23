@@ -20,12 +20,9 @@ from models.vae import VAE
 from models.mdrnn import MDRNN, gmm_loss
 
 parser = argparse.ArgumentParser("MDRNN training")
-parser.add_argument('--logdir', type=str,
-                    help="Where things are logged and models are loaded from.")
-parser.add_argument('--noreload', action='store_true',
-                    help="Do not reload if specified.")
-parser.add_argument('--include_reward', action='store_true',
-                    help="Add a reward modelisation term to the loss.")
+parser.add_argument('--logdir', type=str, help="Where things are logged and models are loaded from.")
+parser.add_argument('--noreload', action='store_true', help="Do not reload if specified.")
+parser.add_argument('--include_reward', action='store_true', help="Add a reward modelisation term to the loss.")
 args = parser.parse_args()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -100,8 +97,9 @@ def to_latent(obs, next_obs):
         (obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma) = [
             vae(x)[1:] for x in (obs, next_obs)]
 
+        batch_size = int(obs_mu.size(0) / SEQ_LEN)  # some batches have obs_mu.size(0) of 256 instead of 512.
         latent_obs, latent_next_obs = [
-            (x_mu + x_logsigma.exp() * torch.randn_like(x_mu)).view(BSIZE, SEQ_LEN, LSIZE)
+            (x_mu + x_logsigma.exp() * torch.randn_like(x_mu)).view(batch_size, SEQ_LEN, LSIZE)
             for x_mu, x_logsigma in
             [(obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma)]]
     return latent_obs, latent_next_obs

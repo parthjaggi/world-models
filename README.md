@@ -1,3 +1,7 @@
+world-models2 was created to access original master code and test carracing on code that hasn't been updated.
+the losses of mdrnn training are still HUGE. not sure if a bug or working correctly.
+will test on original repo (hardmaru code) as well.
+
 # Pytorch implementation of the "WorldModels"
 
 Paper: Ha and Schmidhuber, "World Models", 2018. https://doi.org/10.5281/zenodo.1207631. For a quick summary of the paper and some additional experiments, visit the [github page](https://ctallec.github.io/world-models/).

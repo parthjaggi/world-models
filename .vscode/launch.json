@@ -17,6 +17,50 @@
             ],
             "subProcess": true,
             "justMyCode": false,
+        },
+        {
+            "name": "train-vae-carracing",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/trainvae.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--logdir", "exp_dir",
+                // "--early-stopping-patience", "60",
+                
+                // "--dataset-dir", "datasets/carracing",
+
+                // "--model", "mse_vae",
+                // "--model", "optimal_sigma_vae",
+
+                // "--encoder-decoder", "v3_2",
+                // "--encoder-decoder", "v3_3",
+            ],
+            "subProcess": true,
+            "justMyCode": false,
+        },
+        {
+            "name": "train-rnn-carracing",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/trainmdrnn.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--logdir", "exp_dir",  // VAE model load, and logs saved here.
+                // "--early-stopping-patience", "30",
+                // "--include_reward",  // initially disabled for simiplicity.
+                
+                // "--dataset-dir", "datasets/carracing",
+                // "--dataset-dir", "datasets/dtse_test0_1",
+
+                // "--model", "mse_vae",
+                // "--model", "sigma_vae",
+
+                // "--encoder-decoder", "v3_2",
+                // "--encoder-decoder", "v3_3",
+            ],
+            "subProcess": true,
+            "justMyCode": false,
         }
     ]
 }

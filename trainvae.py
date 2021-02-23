@@ -1,7 +1,7 @@
 """ Training VAE """
 import argparse
 from os.path import join, exists
-from os import mkdir
+from os import mkdir, makedirs
 
 import torch
 import torch.utils.data
@@ -20,15 +20,11 @@ from utils.learning import ReduceLROnPlateau
 from data.loaders import RolloutObservationDataset
 
 parser = argparse.ArgumentParser(description='VAE Trainer')
-parser.add_argument('--batch-size', type=int, default=32, metavar='N',
-                    help='input batch size for training (default: 32)')
-parser.add_argument('--epochs', type=int, default=1000, metavar='N',
-                    help='number of epochs to train (default: 1000)')
+parser.add_argument('--batch-size', type=int, default=32, metavar='N', help='input batch size for training (default: 32)')
+parser.add_argument('--epochs', type=int, default=1000, metavar='N', help='number of epochs to train (default: 1000)')
 parser.add_argument('--logdir', type=str, help='Directory where results are logged')
-parser.add_argument('--noreload', action='store_true',
-                    help='Best model is not reloaded if specified')
-parser.add_argument('--nosamples', action='store_true',
-                    help='Does not save samples during training if specified')
+parser.add_argument('--noreload', action='store_true', help='Best model is not reloaded if specified')
+parser.add_argument('--nosamples', action='store_true', help='Does not save samples during training if specified')
 
 
 args = parser.parse_args()
@@ -124,8 +120,8 @@ def test():
 # check vae dir exists, if not, create it
 vae_dir = join(args.logdir, 'vae')
 if not exists(vae_dir):
-    mkdir(vae_dir)
-    mkdir(join(vae_dir, 'samples'))
+    makedirs(vae_dir, exist_ok=True)
+    makedirs(join(vae_dir, 'samples'), exist_ok=True)
 
 reload_file = join(vae_dir, 'best.tar')
 if not args.noreload and exists(reload_file):

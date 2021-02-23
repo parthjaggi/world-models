@@ -16,10 +16,11 @@ class _RolloutDataset(torch.utils.data.Dataset): # pylint: disable=too-few-publi
             for sd in listdir(root) if isdir(join(root, sd))
             for ssd in listdir(join(root, sd))]
 
+        test_count = int(0.4 * len(self._files))
         if train:
-            self._files = self._files[:-600]
+            self._files = self._files[:-test_count]
         else:
-            self._files = self._files[-600:]
+            self._files = self._files[-test_count:]
 
         self._cum_size = None
         self._buffer = None
