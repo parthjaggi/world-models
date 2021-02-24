@@ -8,6 +8,7 @@ import torch.nn.functional as f
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import numpy as np
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from utils.misc import save_checkpoint
 from utils.misc import ASIZE, LSIZE, RSIZE, RED_SIZE, SIZE
@@ -23,6 +24,7 @@ parser = argparse.ArgumentParser("MDRNN training")
 parser.add_argument('--logdir', type=str, help="Where things are logged and models are loaded from.")
 parser.add_argument('--noreload', action='store_true', help="Do not reload if specified.")
 parser.add_argument('--include_reward', action='store_true', help="Add a reward modelisation term to the loss.")
+parser.add_argument('--nogmm', action='store_true', help="Does not use GMM alongside RNN.")
 args = parser.parse_args()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -50,18 +52,18 @@ rnn_file = join(rnn_dir, 'best.tar')
 if not exists(rnn_dir):
     mkdir(rnn_dir)
 
-mdrnn = MDRNN(LSIZE, ASIZE, RSIZE, 5)
+hidden_size = LSIZE if args.nogmm else RSIZE
+mdrnn = MDRNN(LSIZE, ASIZE, hidden_size, 5, args.nogmm)
 mdrnn.to(device)
 optimizer = torch.optim.RMSprop(mdrnn.parameters(), lr=1e-3, alpha=.9)
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=5)
 earlystopping = EarlyStopping('min', patience=30)
+writer = SummaryWriter(log_dir=rnn_dir, purge_step=0)
 
 
 if exists(rnn_file) and not args.noreload:
     rnn_state = torch.load(rnn_file)
-    print("Loading MDRNN at epoch {} "
-          "with test error {}".format(
-              rnn_state["epoch"], rnn_state["precision"]))
+    print("Loading MDRNN at epoch {} with test error {}".format(rnn_state["epoch"], rnn_state["precision"]))
     mdrnn.load_state_dict(rnn_state["state_dict"])
     optimizer.load_state_dict(rnn_state["optimizer"])
     scheduler.load_state_dict(state['scheduler'])
@@ -104,8 +106,7 @@ def to_latent(obs, next_obs):
             [(obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma)]]
     return latent_obs, latent_next_obs
 
-def get_loss(latent_obs, action, reward, terminal,
-             latent_next_obs, include_reward: bool):
+def get_loss1(latent_obs, action, reward, terminal, latent_next_obs, include_reward: bool):
     """ Compute losses.
 
     The loss that is computed is:
@@ -123,12 +124,7 @@ def get_loss(latent_obs, action, reward, terminal,
     :returns: dictionary of losses, containing the gmm, the mse, the bce and
         the averaged loss.
     """
-    latent_obs, action,\
-        reward, terminal,\
-        latent_next_obs = [arr.transpose(1, 0)
-                           for arr in [latent_obs, action,
-                                       reward, terminal,
-                                       latent_next_obs]]
+    latent_obs, action, reward, terminal, latent_next_obs = [arr.transpose(1, 0) for arr in [latent_obs, action, reward, terminal, latent_next_obs]]
     mus, sigmas, logpi, rs, ds = mdrnn(action, latent_obs)
     gmm = gmm_loss(latent_next_obs, mus, sigmas, logpi)
     bce = f.binary_cross_entropy_with_logits(ds, terminal)
@@ -141,6 +137,14 @@ def get_loss(latent_obs, action, reward, terminal,
     loss = (gmm + bce + mse) / scale
     return dict(gmm=gmm, bce=bce, mse=mse, loss=loss)
 
+def get_loss2(latent_obs, action, reward, terminal, latent_next_obs, include_reward: bool):
+    latent_obs, action, reward, terminal, latent_next_obs = [arr.transpose(1, 0) for arr in [latent_obs, action, reward, terminal, latent_next_obs]]
+    outs = mdrnn(action, latent_obs)
+
+    recons = f.mse_loss(outs, latent_next_obs)
+    scale = LSIZE
+    loss = (recons) / scale
+    return dict(recons=recons, loss=loss)
 
 def data_pass(epoch, train, include_reward): # pylint: disable=too-many-locals
     """ One pass through the data """
@@ -157,6 +161,7 @@ def data_pass(epoch, train, include_reward): # pylint: disable=too-many-locals
     cum_gmm = 0
     cum_bce = 0
     cum_mse = 0
+    cum_recons = 0
 
     pbar = tqdm(total=len(loader.dataset), desc="Epoch {}".format(epoch))
     for i, data in enumerate(loader):
@@ -166,55 +171,54 @@ def data_pass(epoch, train, include_reward): # pylint: disable=too-many-locals
         latent_obs, latent_next_obs = to_latent(obs, next_obs)
 
         if train:
-            losses = get_loss(latent_obs, action, reward,
-                              terminal, latent_next_obs, include_reward)
+            losses = get_loss(latent_obs, action, reward, terminal, latent_next_obs, include_reward)
 
             optimizer.zero_grad()
             losses['loss'].backward()
             optimizer.step()
         else:
             with torch.no_grad():
-                losses = get_loss(latent_obs, action, reward,
-                                  terminal, latent_next_obs, include_reward)
+                losses = get_loss(latent_obs, action, reward, terminal, latent_next_obs, include_reward)
 
         cum_loss += losses['loss'].item()
-        cum_gmm += losses['gmm'].item()
-        cum_bce += losses['bce'].item()
-        cum_mse += losses['mse'].item() if hasattr(losses['mse'], 'item') else \
-            losses['mse']
+        cum_gmm += losses['gmm'].item() if 'gmm' in losses else 0
+        cum_bce += losses['bce'].item() if 'bce' in losses else 0
+        cum_mse += losses['mse'].item() if hasattr(losses['mse'], 'item') else losses['mse']
+        cum_recons += losses['recons'].item() if 'recons' in losses else 0
 
-        pbar.set_postfix_str("loss={loss:10.6f} bce={bce:10.6f} "
-                             "gmm={gmm:10.6f} mse={mse:10.6f}".format(
-                                 loss=cum_loss / (i + 1), bce=cum_bce / (i + 1),
-                                 gmm=cum_gmm / LSIZE / (i + 1), mse=cum_mse / (i + 1)))
+        pbar.set_postfix_str("loss={loss:10.6f} recons={recons:10.6f} bce={bce:10.6f} gmm={gmm:10.6f} mse={mse:10.6f}".format(loss=cum_loss / (i + 1), recons=cum_recons / (i + 1), bce=cum_bce / (i + 1), gmm=cum_gmm / LSIZE / (i + 1), mse=cum_mse / (i + 1)))
         pbar.update(BSIZE)
     pbar.close()
     return cum_loss * BSIZE / len(loader.dataset)
 
 
+get_loss = get_loss2 if args.nogmm else get_loss1
 train = partial(data_pass, train=True, include_reward=args.include_reward)
 test = partial(data_pass, train=False, include_reward=args.include_reward)
 
 cur_best = None
 for e in range(epochs):
-    train(e)
+    train_loss = train(e)
     test_loss = test(e)
     scheduler.step(test_loss)
     earlystopping.step(test_loss)
+
+    writer.add_scalar('train_loss', train_loss, e)
+    writer.add_scalar('test_loss', test_loss, e)
+    writer.file_writer.flush()
 
     is_best = not cur_best or test_loss < cur_best
     if is_best:
         cur_best = test_loss
     checkpoint_fname = join(rnn_dir, 'checkpoint.tar')
-    save_checkpoint({
+    checkpoint = {
         "state_dict": mdrnn.state_dict(),
         "optimizer": optimizer.state_dict(),
         'scheduler': scheduler.state_dict(),
         'earlystopping': earlystopping.state_dict(),
         "precision": test_loss,
-        "epoch": e}, is_best, checkpoint_fname,
-                    rnn_file)
+        "epoch": e}
+    save_checkpoint(checkpoint, is_best, checkpoint_fname, rnn_file)
 
     if earlystopping.stop:
         print("End of Training because of early stopping at epoch {}".format(e))
-        break

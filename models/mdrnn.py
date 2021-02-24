@@ -53,19 +53,19 @@ class _MDRNNBase(nn.Module):
         self.hiddens = hiddens
         self.gaussians = gaussians
 
-        self.gmm_linear = nn.Linear(
-            hiddens, (2 * latents + 1) * gaussians + 2)
+        self.gmm_linear = nn.Linear(hiddens, (2 * latents + 1) * gaussians + 2)
 
     def forward(self, *inputs):
         pass
 
 class MDRNN(_MDRNNBase):
     """ MDRNN model for multi steps forward """
-    def __init__(self, latents, actions, hiddens, gaussians):
+    def __init__(self, latents, actions, hiddens, gaussians, nogmm=False):
         super().__init__(latents, actions, hiddens, gaussians)
-        self.rnn = nn.LSTM(latents + actions, hiddens)
+        self.rnn = nn.LSTM(latents + actions, hiddens)  # hiddens = latents when nogmm is True.
+        self.forward = self.forward2 if nogmm else self.forward1
 
-    def forward(self, actions, latents): # pylint: disable=arguments-differ
+    def forward1(self, actions, latents):
         """ MULTI STEPS forward.
 
         :args actions: (SEQ_LEN, BSIZE, ASIZE) torch tensor
@@ -95,15 +95,22 @@ class MDRNN(_MDRNNBase):
         sigmas = sigmas.view(seq_len, bs, self.gaussians, self.latents)
         sigmas = torch.exp(sigmas)
 
-        pi = gmm_outs[:, :, 2 * stride: 2 * stride + self.gaussians]
+        pi = gmm_outs[:, :, 2 * stride: 2 * stride + self.gaussians]  # what is pi here: related to gmm not temperature. gs: gmm in pytorch.
         pi = pi.view(seq_len, bs, self.gaussians)
         logpi = f.log_softmax(pi, dim=-1)
 
-        rs = gmm_outs[:, :, -2]
+        rs = gmm_outs[:, :, -2]  # rewards
 
-        ds = gmm_outs[:, :, -1]
+        ds = gmm_outs[:, :, -1]  # dones
 
         return mus, sigmas, logpi, rs, ds
+    
+    def forward2(self, actions, latents):
+        seq_len, bs = actions.size(0), actions.size(1)
+        ins = torch.cat([actions, latents], dim=-1)
+        outs, _ = self.rnn(ins)
+        return outs 
+
 
 class MDRNNCell(_MDRNNBase):
     """ MDRNN model for one step forward """
